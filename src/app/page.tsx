@@ -10,7 +10,13 @@ import {
   decryptFileWithMetadata,
 } from "../lib/crypto";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+// --- Configurable via environment variables ---
+const MAX_FILE_SIZE_MB = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB) || 10;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+const IPFS_GATEWAY = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud";
+const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME || "BurnerDrop";
+const BRAND_TAGLINE = process.env.NEXT_PUBLIC_BRAND_TAGLINE || "Zero-Trust File Transfer · Powered by IPFS";
+const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL || "https://github.com/hawkeye-exe/burner-drop";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -87,7 +93,7 @@ export default function BurnerDropApp() {
     if (e.target.files && e.target.files.length > 0) {
       const selected = e.target.files[0];
       if (selected.size > MAX_FILE_SIZE) {
-        showToast("File exceeds 10 MB limit");
+        showToast(`File exceeds ${MAX_FILE_SIZE_MB} MB limit`);
         return;
       }
       setFile(selected);
@@ -101,7 +107,7 @@ export default function BurnerDropApp() {
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const dropped = e.dataTransfer.files[0];
       if (dropped.size > MAX_FILE_SIZE) {
-        showToast("File exceeds 10 MB limit");
+        showToast(`File exceeds ${MAX_FILE_SIZE_MB} MB limit`);
         return;
       }
       setFile(dropped);
@@ -192,7 +198,7 @@ export default function BurnerDropApp() {
       const cryptoKey = await importKey(rawBase64);
 
       // 3. Fetch from IPFS Gateway
-      const ipfsRes = await fetch(`https://gateway.pinata.cloud/ipfs/${recCid}`);
+      const ipfsRes = await fetch(`${IPFS_GATEWAY}/ipfs/${recCid}`);
       if (!ipfsRes.ok) {
         throw new Error("File not found on IPFS or gateway timeout.");
       }
@@ -222,10 +228,8 @@ export default function BurnerDropApp() {
       <nav className="navbar">
         <div className="nav-inner">
           <div className="brand-wrap">
-            <img src="/logo.png" alt="BurnerDrop Logo" width={32} height={32} style={{ borderRadius: '8px' }} />
-            <span className="brand">
-              Burner<span className="brand-accent">Drop</span>
-            </span>
+            <img src="/logo.png" alt={`${BRAND_NAME} Logo`} width={32} height={32} style={{ borderRadius: '8px' }} />
+            <span className="brand">{BRAND_NAME}</span>
           </div>
           <div className="nav-right">
             <span className="nav-chip">
@@ -234,6 +238,13 @@ export default function BurnerDropApp() {
               </svg>
               AES-256 Encrypted
             </span>
+            {GITHUB_URL && (
+              <a className="config-btn" href={GITHUB_URL} target="_blank" rel="noopener noreferrer" title="View on GitHub">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                </svg>
+              </a>
+            )}
             <button className="config-btn" onClick={toggleTheme} title="Toggle Theme">
               <svg className={`moon-icon ${theme === "dark" ? "hidden" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -258,7 +269,7 @@ export default function BurnerDropApp() {
         <div className="container">
           {/* Hero */}
           <section className="hero">
-            <div className="hero-badge">🔐 Zero-Trust File Transfer · Powered by IPFS</div>
+            <div className="hero-badge">🔐 {BRAND_TAGLINE}</div>
             <h1 className="hero-title">
               Send files with
               <br />
@@ -333,7 +344,7 @@ export default function BurnerDropApp() {
                       <p className="drop-text">
                         Drag & drop files here, or <span className="browse-link">browse</span>
                       </p>
-                      <p className="drop-hint">Max 10 MB · No sign-up needed</p>
+                      <span className="drop-hint">Max {MAX_FILE_SIZE_MB} MB · No sign-up needed</span>
                     </div>
                     <input type="file" ref={fileInputRef} onChange={handleFileSelect} hidden />
                   </div>

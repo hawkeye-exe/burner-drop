@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { applyRateLimit } from "@/lib/rateLimit";
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB) || 50;
+const MAX_FILE_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 const PINATA_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS";
 
 export async function POST(request: Request) {
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
 
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: "Payload exceeds 50MB limit" },
+        { error: `Payload exceeds ${MAX_UPLOAD_SIZE_MB}MB limit` },
         { status: 413 },
       );
     }
