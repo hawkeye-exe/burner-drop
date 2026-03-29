@@ -12,13 +12,6 @@ import {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
-// Simulated IPFS Store (In-Memory)
-const mockIPFS = new Map<string, Blob>();
-
-function generateMockCID() {
-  return "bafkrei" + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-}
-
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -146,11 +139,24 @@ export default function BurnerDropApp() {
       setProgress(50);
       const encryptedBlob = await encryptFileWithMetadata(file, cryptoKey);
 
-      // 3. Mock Upload to IPFS
-      setProgress(80);
-      await new Promise((resolve) => setTimeout(resolve, 800)); // Simulate network
-      const cid = generateMockCID();
-      mockIPFS.set(cid, encryptedBlob);
+      // 3. Upload to IPFS via API Route
+      setProgress(70);
+      const formData = new FormData();
+      formData.append("file", encryptedBlob, "encrypted-payload.bin");
+
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const errData = await uploadRes.json();
+        throw new Error(errData.error || "Upload failed");
+      }
+
+      setProgress(90);
+      const { IpfsHash } = await uploadRes.json();
+      const cid = IpfsHash;
 
       setProgress(100);
       
@@ -185,12 +191,12 @@ export default function BurnerDropApp() {
       // 2. Import Key
       const cryptoKey = await importKey(rawBase64);
 
-      // 3. Fetch from Mock IPFS
-      await new Promise((resolve) => setTimeout(resolve, 600)); // network delay
-      const encryptedBlob = mockIPFS.get(recCid);
-      if (!encryptedBlob) {
-        throw new Error("File not found on the simulated IPFS network.");
+      // 3. Fetch from IPFS Gateway
+      const ipfsRes = await fetch(`https://gateway.pinata.cloud/ipfs/${recCid}`);
+      if (!ipfsRes.ok) {
+        throw new Error("File not found on IPFS or gateway timeout.");
       }
+      const encryptedBlob = await ipfsRes.blob();
 
       // 4. Decrypt 
       const { file: decryptedFile } = await decryptFileWithMetadata(encryptedBlob, cryptoKey);
