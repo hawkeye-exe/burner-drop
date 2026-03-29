@@ -63,9 +63,10 @@ export async function POST(request: Request) {
     const pinataData = await pinataResponse.json();
 
     return NextResponse.json(pinataData);
-  } catch {
+  } catch (err: any) {
+    console.error("Upload Error:", err);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: "Internal Server Error: " + (err.message || String(err)) },
       { status: 500 },
     );
   }
