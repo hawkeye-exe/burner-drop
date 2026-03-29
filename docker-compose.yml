@@ -1,0 +1,8 @@
+services:
+  burnerdrop:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PINATA_JWT=${PINATA_JWT}
+    restart: unless-stopped

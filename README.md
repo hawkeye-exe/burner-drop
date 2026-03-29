@@ -8,6 +8,14 @@
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
   [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
   [![IPFS](https://img.shields.io/badge/Storage-IPFS-65C2CB?logo=ipfs)](https://ipfs.tech/)
+  [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://hub.docker.com/)
+</div>
+
+<div align="center">
+  <h3>One-Click Deploy</h3>
+
+  [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fhawkeye-exe%2Fburner-drop&env=PINATA_JWT&envDescription=Your%20Pinata%20API%20JWT%20for%20IPFS%20storage&project-name=burnerdrop&repository-name=burner-drop)
+  [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/hawkeye-exe/burner-drop)
 </div>
 
 <br />
@@ -93,11 +101,73 @@ BurnerDrop operates on a strict separation of concerns, ensuring that the server
 
 ---
 
-## 🔮 Future Roadmap
+## 🐳 Self-Hosting
 
-- **Chunked Uploading**: Implementing multi-part uploads to bypass the 10MB restriction for massive files.
-- **Smart Contract Expirations**: Integrating decentralized timers (e.g., via Filecoin/smart contracts) to automatically unpin content after a predetermined duration.
-- **User Auth & DID Integration**: Exploring Decentralized Identifiers (DIDs) to establish verifiable sender identities without compromising the zero-trust architecture.
+### Docker (Recommended)
+
+```bash
+git clone https://github.com/hawkeye-exe/burner-drop.git
+cd burner-drop
+
+# Add your Pinata JWT
+echo "PINATA_JWT=your_jwt_here" > .env.local
+
+# Build and run
+docker compose up -d
+```
+
+BurnerDrop will be available at `http://localhost:3000`.
+
+### Manual
+
+```bash
+npm install
+npm run build
+npm start
+```
+
+---
+
+## 🧩 Modular SDK — Build Your Own Frontend
+
+BurnerDrop's crypto engine (`src/lib/crypto.ts`) is a **standalone, framework-agnostic module** that runs in any browser environment. You can import it into React, Vue, Svelte, vanilla JS, React Native (with Web Crypto polyfill), or any platform that supports the Web Crypto API.
+
+### Exported Functions
+
+| Function | Description |
+|---|---|
+| `generateEncryptionKey()` | Generates a random AES-256-GCM key. Returns `CryptoKey`. |
+| `exportKey(key)` | Exports a CryptoKey to a base64 string for sharing. |
+| `importKey(base64Str)` | Imports a base64 string back into a usable CryptoKey. |
+| `encryptFileWithMetadata(file, key)` | Encrypts a `File` object (including its name and MIME type) into a single `Blob`. |
+| `decryptFileWithMetadata(blob, key)` | Decrypts a `Blob` back into the original `File` with correct name and type. |
+
+### Usage Example (Vanilla JS)
+
+```js
+import { generateEncryptionKey, exportKey, importKey,
+         encryptFileWithMetadata, decryptFileWithMetadata } from './crypto';
+
+// Encrypt
+const key = await generateEncryptionKey();
+const password = await exportKey(key);
+const encryptedBlob = await encryptFileWithMetadata(myFile, key);
+// Upload encryptedBlob to any storage backend
+
+// Decrypt (on another device)
+const key2 = await importKey(password);
+const { file } = await decryptFileWithMetadata(encryptedBlob, key2);
+// file.name, file.type, and contents are fully restored
+```
+
+### API Route (`POST /api/upload`)
+
+The backend accepts a `multipart/form-data` request with a single `file` field and forwards it to Pinata IPFS. Returns `{ IpfsHash }` on success.
+
+```bash
+curl -X POST -F "file=@encrypted-payload.bin" https://your-domain.com/api/upload
+# {"IpfsHash": "Qm...", "PinSize": 1234, "Timestamp": "..."}
+```
 
 ---
 
