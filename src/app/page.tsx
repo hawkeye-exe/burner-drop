@@ -10,6 +10,8 @@ import {
   decryptFileWithMetadata,
 } from "../lib/crypto";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
 // Simulated IPFS Store (In-Memory)
 const mockIPFS = new Map<string, Blob>();
 
@@ -82,7 +84,7 @@ export default function BurnerDropApp() {
         setTimeout(() => setCopiedField(null), 1500);
       }
       showToast("Copied!");
-    } catch (err) {
+    } catch {
       showToast("Failed to copy");
     }
   };
@@ -90,7 +92,12 @@ export default function BurnerDropApp() {
   // --- SEND HANDLERS ---
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+      const selected = e.target.files[0];
+      if (selected.size > MAX_FILE_SIZE) {
+        showToast("File exceeds 10 MB limit");
+        return;
+      }
+      setFile(selected);
       setResult(null);
       setProgress(0);
     }
@@ -99,7 +106,12 @@ export default function BurnerDropApp() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFile(e.dataTransfer.files[0]);
+      const dropped = e.dataTransfer.files[0];
+      if (dropped.size > MAX_FILE_SIZE) {
+        showToast("File exceeds 10 MB limit");
+        return;
+      }
+      setFile(dropped);
       setResult(null);
       setProgress(0);
     }
@@ -143,14 +155,14 @@ export default function BurnerDropApp() {
       setProgress(100);
       
       // We format the exported base64 key slightly for user readability
-      let formattedPw = exportedKeyStr.replace(/\+/g, "x").replace(/\//g, "z").replace(/=/g, "");
+      const formattedPw = exportedKeyStr.replace(/\+/g, "~").replace(/\//g, "_").replace(/=/g, "");
       const chunks = formattedPw.match(/.{1,4}/g) || [formattedPw];
       const finalPw = chunks.join("-");
 
       setResult({ cid, pw: finalPw });
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert("Encryption failed: " + err.message);
+      alert("Encryption failed: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsProcessing(false);
     }
@@ -167,7 +179,7 @@ export default function BurnerDropApp() {
     try {
       // 1. Unformat password back to typical base64 output style
       let rawBase64 = recPw.replace(/-/g, "");
-      rawBase64 = rawBase64.replace(/x/g, "+").replace(/z/g, "/");
+      rawBase64 = rawBase64.replace(/~/g, "+").replace(/_/g, "/");
       while (rawBase64.length % 4 !== 0) rawBase64 += "=";
 
       // 2. Import Key
@@ -188,9 +200,9 @@ export default function BurnerDropApp() {
       showToast("Decrypted!");
       setRecCid("");
       setRecPw("");
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert("Decryption Failed: " + err.message);
+      alert("Decryption Failed: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsProcessing(false);
     }
@@ -434,6 +446,14 @@ export default function BurnerDropApp() {
                       </svg>
                       Both CID and Password are required to decrypt. Never share them in the same message.
                     </div>
+
+                    <button className="btn-action btn-new" onClick={clearFile}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      Send Another File
+                    </button>
                   </div>
                 )}
               </div>
@@ -517,7 +537,7 @@ export default function BurnerDropApp() {
 
       {/* Toast */}
       {toastMsg && (
-        <div className="toast visible">
+        <div className="toast show">
           <span>{toastMsg}</span>
         </div>
       )}

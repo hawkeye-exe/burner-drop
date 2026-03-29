@@ -65,6 +65,10 @@ function setApiKey(jwt) {
     _pinataJwt = jwt.trim();
 }
 
+// Export for external use if needed
+// window.BurnerDrop = window.BurnerDrop || {};
+// window.BurnerDrop.setApiKey = setApiKey;
+
 
 // ---------------------------------------------------------------------------
 // Utility — Base64 ↔ ArrayBuffer
@@ -127,6 +131,10 @@ function requireApiKey() {
         );
     }
 }
+
+// Export for external use if needed
+// window.BurnerDrop = window.BurnerDrop || {};
+// window.BurnerDrop.requireApiKey = requireApiKey;
 
 
 // ---------------------------------------------------------------------------
@@ -251,7 +259,7 @@ async function decryptFile(encryptedBlob, key, iv, fileType, fileName) {
             cryptoKey,
             ciphertext
         );
-    } catch (err) {
+    } catch {
         throw new Error(
             '[BurnerDrop] Decryption failed — wrong key, corrupted data, or tampered ciphertext.'
         );
@@ -341,16 +349,16 @@ async function fetchFromIPFS(cid) {
  *   fileType: string
  * }>}
  */
-async function encryptAndUpload(file) {
-    // Step 1: Encrypt
-    const { encryptedData, iv, key, fileType, fileName } = await encryptFile(file);
-
-    // Step 2: Upload encrypted blob to IPFS
-    const cid = await uploadToIPFS(encryptedData);
-
-    // Return the share payload — everything the recipient needs
-    return { cid, key, iv, fileName, fileType };
-}
+// async function encryptAndUpload(file) {
+//     // Step 1: Encrypt
+//     const { encryptedData, iv, key, fileType, fileName } = await encryptFile(file);
+//
+//     // Step 2: Upload encrypted blob to IPFS
+//     const cid = await uploadToIPFS(encryptedData);
+//
+//     // Return the share payload — everything the recipient needs
+//     return { cid, key, iv, fileName, fileType };
+// }
 
 
 // ---------------------------------------------------------------------------

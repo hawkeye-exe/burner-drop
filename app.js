@@ -55,7 +55,7 @@ function initApp() {
             document.documentElement.setAttribute('data-theme', nextTheme);
             try {
                 localStorage.setItem('bd_theme', nextTheme);
-            } catch (e) { /* ignore */ }
+            } catch { /* ignore */ }
             updateThemeIcon(nextTheme);
         });
     }
