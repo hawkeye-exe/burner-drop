@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { CheckCircle } from "lucide-react";
 import {
   generateEncryptionKey,
   exportKey,
@@ -43,6 +44,8 @@ export default function BurnerDropApp() {
   const [recCid, setRecCid] = useState("");
   const [recPw, setRecPw] = useState("");
 
+  const [copiedField, setCopiedField] = useState<'cid' | 'key' | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize Theme
@@ -71,9 +74,13 @@ export default function BurnerDropApp() {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, field?: 'cid' | 'key') => {
     try {
       await navigator.clipboard.writeText(text);
+      if (field) {
+        setCopiedField(field);
+        setTimeout(() => setCopiedField(null), 1500);
+      }
       showToast("Copied!");
     } catch (err) {
       showToast("Failed to copy");
@@ -386,11 +393,15 @@ export default function BurnerDropApp() {
                       </div>
                       <div className="cred-row">
                         <input type="text" className="cred-input" readOnly value={result.cid} />
-                        <button className="copy-btn" onClick={() => copyToClipboard(result.cid)}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" />
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                          </svg>
+                        <button className="copy-btn" onClick={() => copyToClipboard(result.cid, 'cid')}>
+                          {copiedField === 'cid' ? (
+                            <CheckCircle className="text-green-400" size={14} />
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -402,11 +413,15 @@ export default function BurnerDropApp() {
                       </div>
                       <div className="cred-row">
                         <input type="text" className="cred-input" readOnly value={result.pw} />
-                        <button className="copy-btn" onClick={() => copyToClipboard(result.pw)}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" />
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                          </svg>
+                        <button className="copy-btn" onClick={() => copyToClipboard(result.pw, 'key')}>
+                          {copiedField === 'key' ? (
+                            <CheckCircle className="text-green-400" size={14} />
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          )}
                         </button>
                       </div>
                     </div>
