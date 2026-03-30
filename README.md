@@ -76,7 +76,8 @@ BurnerDrop operates on a strict separation of concerns, ensuring that the server
 2. Metadata (filename, mime-type) is packed into a unified binary format.
 3. The entire payload is encrypted using **AES-256-GCM** via the browser's native Web Crypto API.
 4. The resulting ciphertext is sent to our Next.js API route.
-5. The API route verifies the payload size and applies rate limiting before forwarding the blind data to the Pinata IPFS network.
+5. The API route extracts the sender's IP for **SHA-256 hashed rate-limiting** and verifies the payload size (max 50MB).
+6. It filters the request, sanitizes potential error returns, and forwards the blind binary data to the Pinata IPFS network.
 
 ### Retrieval Pipeline
 1. When a recipient is given the share credentials (CID and Password), the application extracts the details.
@@ -88,15 +89,19 @@ BurnerDrop operates on a strict separation of concerns, ensuring that the server
 
 ## 🛡️ Security & Privacy Engineering
 
-- **Zero-Log Infrastructure**: We do not store files, keys, or metadata on our servers. The infrastructure only processes and relays encrypted binary blobs.
-- **Server-Side Secret Masking**: Infrastructure secrets like Pinata JWTs are injected securely on the backend.
+- **Zero-Log Infrastructure**: We do not store files, keys, or metadata on our servers. Even IPs used for rate-limiting are hashed via SHA-256 with an ephemeral salt.
+- **Server-Side Secret Masking**: Infrastructure secrets like Pinata JWTs are injected securely on the backend; they never leak to the client.
+- **Security Hardening**:
+  - **API Sanitization**: All backend errors are intercepted and sanitized to prevent internal architecture disclosure.
+  - **Metadata Protection**: Strict 1MB limit on encrypted metadata headers to prevent memory exhaustion attacks.
+  - **Dependency Integrity**: Regular automated audits to ensure 0 known vulnerabilities in the dependency tree.
 - **Edge Security Headers**: We enforce strict HTTPS, HSTS, X-Frame-Options, and no-sniff headers to prevent downgrade attacks and content spoofing.
 
 ---
 
 ## 🚧 Limitations
 
-- **10MB Upload Limit**: To ensure reliable processing across edge environments, individual file payloads are currently hard-capped at 10MB in the browser and API.
+- **Upload Limits**: Individual file payloads are capped at **10MB** in the browser for optimal client-side performance. The API route supports up to **50MB** for final encrypted packages.
 - **IPFS Immutability**: Once an encrypted payload is pinned to IPFS, it cannot be traditionally "deleted." Security relies strictly on the mathematical guarantee of the AES-256-GCM encryption.
 
 ---
@@ -136,11 +141,11 @@ BurnerDrop's crypto engine (`src/lib/crypto.ts`) is a **standalone, framework-ag
 
 | Function | Description |
 |---|---|
-| `generateEncryptionKey()` | Generates a random AES-256-GCM key. Returns `CryptoKey`. |
-| `exportKey(key)` | Exports a CryptoKey to a base64 string for sharing. |
-| `importKey(base64Str)` | Imports a base64 string back into a usable CryptoKey. |
-| `encryptFileWithMetadata(file, key)` | Encrypts a `File` object (including its name and MIME type) into a single `Blob`. |
-| `decryptFileWithMetadata(blob, key)` | Decrypts a `Blob` back into the original `File` with correct name and type. |
+| `generateEncryptionKey()` | Generates a cryptographically strong random **AES-256 (32 bytes)** key. |
+| `exportKey(key)` | Exports a `CryptoKey` to a URL-safe base64 string for easy sharing. |
+| `importKey(base64Str)` | Decodes and imports a base64 string back into a standard `CryptoKey`. |
+| `encryptFileWithMetadata(file, key)` | Encrypts a `File` (including name/MIME type) into a single secured `Blob`. |
+| `decryptFileWithMetadata(blob, key)` | Decrypts a `Blob` back into the original `File` with full name/type restoration. |
 
 ### Usage Example (Vanilla JS)
 
