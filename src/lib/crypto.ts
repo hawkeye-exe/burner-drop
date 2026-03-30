@@ -129,6 +129,8 @@ export async function importKey(keyStr: string): Promise<CryptoKey> {
   return key;
 }
 
+const MAX_METADATA_SIZE = 1024 * 1024; // 1MB limit for metadata
+
 export async function encryptFileWithMetadata(
   file: File,
   key: CryptoKey,
@@ -137,7 +139,7 @@ export async function encryptFileWithMetadata(
   const subtle = getSubtleCrypto();
   const metadataBytes = encodeMetadata({ name: file.name, type: file.type });
 
-  if (metadataBytes.byteLength > 0xffffffff) {
+  if (metadataBytes.byteLength > MAX_METADATA_SIZE) {
     throw new Error("File metadata is too large to encrypt.");
   }
 
@@ -198,8 +200,8 @@ export async function decryptFileWithMetadata(
   const metadataStart = METADATA_HEADER_LENGTH;
   const metadataEnd = metadataStart + metadataLength;
 
-  if (metadataEnd > decryptedBytes.byteLength) {
-    throw new Error("Encrypted metadata length is invalid.");
+  if (metadataLength > MAX_METADATA_SIZE || metadataEnd > decryptedBytes.byteLength) {
+    throw new Error("Encrypted metadata length is invalid or too large.");
   }
 
   const metadata = decodeMetadata(

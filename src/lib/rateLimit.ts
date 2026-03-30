@@ -35,6 +35,12 @@ function createRateLimitError(): Error & { status: number } {
 }
 
 export function applyRateLimit(ip: string): void {
+  if (!ip || ip === "" || ip === "unknown") {
+    // Treat unknown as from a single pool if desired, or skip.
+    // Here we treat it as a valid (but generic) identifier.
+    ip = "anonymous";
+  }
+
   const now = Date.now();
   const hashedIp = hashIp(ip);
   const activeTimestamps = getActiveTimestamps(hashedIp, now);
