@@ -26,7 +26,37 @@ To protect the client-side execution environment from tampering, the application
 - **X-Frame-Options & CSP**: Prevents clickjacking by denying the application from being embedded in malicious iframes.
 - **X-Content-Type-Options**: The `nosniff` header forces browsers to respect the declared MIME types, mitigating drive-by download exploits.
 
+## Key Transport: URL Fragment
+
+The decryption key travels in the URL fragment of the share link (`/d/<cid>#<key>`). Per RFC 3986 and browser behaviour, the fragment is never included in HTTP requests. Consequences:
+
+- **Not in server logs** — Vercel/Next.js access logs, CDN logs, and IPFS gateway logs only record `/d/<cid>`.
+- **Not in referrers** — the app sets `Referrer-Policy: no-referrer`, and browsers strip fragments from `Referer` regardless.
+- **Not in the API** — `/api/upload` only receives ciphertext; the key is generated and kept in the browser.
+
+### Link Leakage = Full Access
+
+The full link is a bearer credential. Anyone who obtains it (chat history, email, screenshots, browser history, synced tabs, link-preview bots that execute JavaScript) can decrypt the file. Mitigations:
+
+- **Split Mode** — share the CID and the password over two independent channels. An attacker must compromise both.
+- Prefer end-to-end encrypted messengers for sending the link.
+- Treat the link like a password; don't paste it into public issue trackers or docs.
+
+### Immutability
+
+Ciphertext pinned to IPFS cannot be reliably deleted once replicated. Confidentiality depends entirely on the secrecy of the key and the strength of AES-256-GCM. GCM's authentication tag ensures tampered ciphertext fails to decrypt rather than yielding corrupted plaintext.
+
 ## Threat Model
+
+| Threat | Mitigation | Residual risk |
+|---|---|---|
+| Server / hosting compromise | Client-side encryption; server only relays ciphertext | Malicious JS could be served to future users (trust the deployment) |
+| Gateway / IPFS observer | Ciphertext only; key never sent | CID and ciphertext size are visible |
+| Log / referrer leakage | Key in fragment; `no-referrer` | None for the key |
+| Share-link interception | Split Mode (two channels) | Single-link mode: link = access |
+| Tampered ciphertext | AES-GCM authentication tag | Download fails (integrity preserved) |
+| MITM | TLS + HSTS | — |
+| Abuse / DoS of upload | IP rate limit, size limit | In-memory limiter is per-instance |
 
 ```mermaid
 mindmap
@@ -37,6 +67,10 @@ mindmap
     Server_Breach
       Client_Side_Encryption
       Zero_Log_Policy
+    Key_Leakage
+      URL_Fragment
+      No_Referrer
+      Split_Mode
     Traffic_Analysis
       Ephemeral_Salted_IP_Hash
     Malicious_Payload

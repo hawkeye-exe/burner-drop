@@ -6,6 +6,13 @@ const MAX_FILE_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 const PINATA_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS";
 
 export async function POST(request: Request) {
+  if (!process.env.PINATA_JWT) {
+    return NextResponse.json(
+      { error: "Storage is not configured on this instance (missing PINATA_JWT)." },
+      { status: 503 },
+    );
+  }
+
   try {
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -64,10 +71,10 @@ export async function POST(request: Request) {
     const pinataData = await pinataResponse.json();
 
     return NextResponse.json(pinataData);
-  } catch (err: any) {
+  } catch (err) {
     console.error("Upload Error:", err);
     return NextResponse.json(
-      { error: "Internal Server Error: " + (err.message || String(err)) },
+      { error: "Upload to IPFS failed. Please try again." },
       { status: 500 },
     );
   }

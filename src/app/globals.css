@@ -639,3 +639,14 @@ body {
     .copy-btn { width:100%; height:36px; }
     .trust-bar { gap:16px; }
 }
+
+/* --- v0.2: one-link sharing --- */
+@keyframes bd-indeterminate { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+.progress-indeterminate { animation: bd-indeterminate 1.2s ease-in-out infinite; }
+a.btn-action { text-decoration: none; }
+.share-link-box { display:flex; gap:8px; align-items:center; }
+.share-link-box .cred-input { font-size: 12px; }
+.mode-toggle { background:none; border:none; color: var(--primary); cursor:pointer; font-size:13px; padding:4px 0; text-align:left; }
+.mode-toggle:hover { text-decoration: underline; }
+.config-banner { margin-bottom: 16px; padding: 10px 14px; border-radius: 10px; font-size: 13px; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4); color: inherit; }
+.receive-or { text-align:center; font-size:12px; opacity:0.6; margin: 4px 0; }

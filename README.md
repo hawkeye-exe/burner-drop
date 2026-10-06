@@ -26,11 +26,47 @@
 
 ## ✨ Features
 
+- **One-Link Sharing**: After encryption you get a single link — `https://<host>/d/<cid>#<key>`. The key lives in the URL fragment (`#...`), which browsers never send to any server, so neither BurnerDrop nor the IPFS gateway ever sees it. The recipient opens the link, sees the file name and size, and decrypts + downloads entirely in their browser.
+- **Split Mode**: For extra safety, share the CID and the password over two different channels (e.g. email + Signal). The Receive tab accepts either a full link or a CID + password pair.
 - **Double Encryption**: Files are given a unique IPFS Content Identifier (CID) and an AES-256-GCM decryption password. Both are required to access the file.
 - **Zero-Knowledge Architecture**: Encryption happens entirely client-side using the Web Crypto API. The server never sees the raw file, the encryption key, or the unencrypted metadata.
 - **Decentralized Storage**: Encrypted blobs are pinned directly to the IPFS network via Pinata, ensuring high availability and censorship resistance.
 - **Lossless Key Management**: Robust base64 implementation ensures keys are perfectly preserved during the URL/Password sharing phase.
 - **Beautiful UI/UX**: Custom-designed, premium interface with fluid animations, drag-and-drop support, and built-in dark mode.
+
+---
+
+## ⚙️ How It Works
+
+```mermaid
+sequenceDiagram
+    participant S as Sender (Browser)
+    participant API as /api/upload (Next.js)
+    participant IPFS as Pinata / IPFS
+    participant R as Recipient (Browser)
+
+    S->>S: Generate AES-256-GCM key, encrypt file + metadata
+    S->>API: POST ciphertext (multipart "file")
+    API->>API: Size check + rate limit
+    API->>IPFS: Pin ciphertext
+    IPFS-->>API: CID
+    API-->>S: { IpfsHash: CID }
+    S->>S: Build link /d/<cid>#<key>
+    S-->>R: Share link (or CID + password separately)
+    R->>R: Open /d/<cid>, read key from #fragment (never sent)
+    R->>IPFS: GET ciphertext via gateway
+    IPFS-->>R: Encrypted blob
+    R->>R: Decrypt locally, show name/size, download
+```
+
+| Route | Purpose |
+|---|---|
+| `/` | Send (encrypt + upload) and Receive (paste link or CID + password) |
+| `/d/[cid]#<key>` | Recipient page — fetches ciphertext and decrypts in-browser |
+| `POST /api/upload` | Blind relay of ciphertext to Pinata (size check + rate limit) |
+| `GET /api/health` | `{ ok: true, storage: "pinata" \| "unconfigured" }` — the UI shows a banner when storage isn't configured |
+
+**Live demo:** https://burner-drop.vercel.app
 
 ---
 
@@ -79,10 +115,12 @@ BurnerDrop operates on a strict separation of concerns, ensuring that the server
 5. The API route verifies the payload size and applies rate limiting before forwarding the blind data to the Pinata IPFS network.
 
 ### Retrieval Pipeline
-1. When a recipient is given the share credentials (CID and Password), the application extracts the details.
-2. It fetches the ciphertext from IPFS via gateway fallbacks.
-3. Once retrieved, the payload is decrypted client-side.
-4. The metadata is unpacked, and the original file is reconstructed and offered for download.
+1. The recipient opens the share link `/d/<cid>#<key>`. The key is read from the URL fragment, which is never transmitted over HTTP.
+2. The page fetches the ciphertext from the IPFS gateway (with fallback gateways).
+3. The payload is decrypted client-side; the original file name and size are shown.
+4. The file is reconstructed and offered for download.
+
+In **Split Mode** the recipient pastes the CID and password into the Receive tab instead — same decryption path.
 
 ---
 
@@ -90,6 +128,8 @@ BurnerDrop operates on a strict separation of concerns, ensuring that the server
 
 - **Zero-Log Infrastructure**: We do not store files, keys, or metadata on our servers. The infrastructure only processes and relays encrypted binary blobs.
 - **Server-Side Secret Masking**: Infrastructure secrets like Pinata JWTs are injected securely on the backend.
+- **Key Never Leaves the Browser**: The key is only ever in the URL fragment or the password field. Fragments are not included in HTTP requests, server logs, or (with `Referrer-Policy: no-referrer`) referrer headers.
+- **Link = Access**: Anyone holding the full link can decrypt the file. Use Split Mode when the channel itself is untrusted.
 - **Edge Security Headers**: We enforce strict HTTPS, HSTS, X-Frame-Options, and no-sniff headers to prevent downgrade attacks and content spoofing.
 
 ---
@@ -160,14 +200,35 @@ const { file } = await decryptFileWithMetadata(encryptedBlob, key2);
 // file.name, file.type, and contents are fully restored
 ```
 
-### API Route (`POST /api/upload`)
+### API
 
-The backend accepts a `multipart/form-data` request with a single `file` field and forwards it to Pinata IPFS. Returns `{ IpfsHash }` on success.
+The backend accepts a `multipart/form-data` request with a single `file` field and forwards it to Pinata IPFS. Returns the Pinata response (including `IpfsHash`) on success.
 
 ```bash
 curl -X POST -F "file=@encrypted-payload.bin" https://your-domain.com/api/upload
 # {"IpfsHash": "Qm...", "PinSize": 1234, "Timestamp": "..."}
+
+curl https://your-domain.com/api/health
+# {"ok": true, "storage": "pinata"}
 ```
+
+Full reference: [docs/07-api.md](docs/07-api.md).
+
+---
+
+## 📚 Documentation
+
+| Doc | Topic |
+|---|---|
+| [01-architecture.md](docs/01-architecture.md) | System architecture & data flow |
+| [02-cryptography.md](docs/02-cryptography.md) | AES-256-GCM payload format & key handling |
+| [03-ipfs-storage.md](docs/03-ipfs-storage.md) | Pinata / IPFS storage |
+| [04-security-model.md](docs/04-security-model.md) | Security & threat model |
+| [05-rate-limiting.md](docs/05-rate-limiting.md) | Rate limiter internals |
+| [06-deployment.md](docs/06-deployment.md) | Deployment (Vercel, Docker, Netlify) |
+| [07-api.md](docs/07-api.md) | HTTP API reference |
+
+See also [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md).
 
 ---
 

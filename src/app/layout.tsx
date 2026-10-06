@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   title: "BurnerDrop — Zero-Trust File Sharing",
   description:
     "End-to-end encrypted file sharing powered by IPFS. Your files, your keys.",
+  // Never leak share URLs (or their paths) to third parties via Referer.
+  referrer: "no-referrer",
 };
 
 export default function RootLayout({

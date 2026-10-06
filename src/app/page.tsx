@@ -9,9 +9,19 @@ import {
   encryptFileWithMetadata,
   decryptFileWithMetadata,
 } from "../lib/crypto";
+import {
+  buildShareLink,
+  formatSize,
+  isValidCid,
+  keyToToken,
+  normalizePassword,
+  parseShareLink,
+  tokenToKey,
+  tokenToPassword,
+} from "../lib/share";
 
 // --- Configurable via environment variables ---
-const MAX_FILE_SIZE_MB = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB) || 10;
+const MAX_FILE_SIZE_MB = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB) || 4; // Vercel functions cap request bodies at ~4.5 MB
 const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 const IPFS_GATEWAY = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud";
 const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME || "BurnerDrop";
@@ -38,14 +48,16 @@ export default function BurnerDropApp() {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<{ cid: string; pw: string } | null>(null);
+  const [result, setResult] = useState<{ cid: string; pw: string; link: string } | null>(null);
+  const [showSplit, setShowSplit] = useState(false);
+  const [storageReady, setStorageReady] = useState(true);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Receive States
   const [recCid, setRecCid] = useState("");
   const [recPw, setRecPw] = useState("");
 
-  const [copiedField, setCopiedField] = useState<'cid' | 'key' | null>(null);
+  const [copiedField, setCopiedField] = useState<'cid' | 'key' | 'link' | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,6 +71,13 @@ export default function BurnerDropApp() {
     }
     setTheme(saved as "light" | "dark");
     document.documentElement.setAttribute("data-theme", saved);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((d) => setStorageReady(d.storage !== "unconfigured"))
+      .catch(() => {});
   }, []);
 
   const toggleTheme = () => {
@@ -75,7 +94,7 @@ export default function BurnerDropApp() {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  const copyToClipboard = async (text: string, field?: 'cid' | 'key') => {
+  const copyToClipboard = async (text: string, field?: 'cid' | 'key' | 'link') => {
     try {
       await navigator.clipboard.writeText(text);
       if (field) {
@@ -123,11 +142,6 @@ export default function BurnerDropApp() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
-  };
 
   // The actual mock upload sequence using their crypto library
   const handleEncryptAndSend = async () => {
@@ -166,15 +180,15 @@ export default function BurnerDropApp() {
 
       setProgress(100);
       
-      // We format the exported base64 key slightly for user readability
-      const formattedPw = exportedKeyStr.replace(/\+/g, "~").replace(/\//g, "_").replace(/=/g, "");
-      const chunks = formattedPw.match(/.{1,4}/g) || [formattedPw];
-      const finalPw = chunks.join("-");
-
-      setResult({ cid, pw: finalPw });
+      const token = keyToToken(exportedKeyStr);
+      setResult({
+        cid,
+        pw: tokenToPassword(token),
+        link: buildShareLink(window.location.origin, cid, token),
+      });
     } catch (err) {
       console.error(err);
-      alert("Encryption failed: " + (err instanceof Error ? err.message : String(err)));
+      showToast("Upload failed: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsProcessing(false);
     }
@@ -182,23 +196,28 @@ export default function BurnerDropApp() {
 
   // --- RECEIVE HANDLERS ---
   const handleDecryptAndDownload = async () => {
+    // A full share link pasted into the CID field opens the drop page directly.
+    const parsed = parseShareLink(recCid);
+    if (parsed) {
+      window.location.href = `/d/${parsed.cid}#${parsed.token}`;
+      return;
+    }
     if (!recCid || !recPw) {
-      alert("CID and Password are required");
+      showToast("Paste a share link, or enter both CID and password");
+      return;
+    }
+    if (!isValidCid(recCid.trim())) {
+      showToast("That doesn't look like a valid CID");
       return;
     }
 
     setIsProcessing(true);
     try {
-      // 1. Unformat password back to typical base64 output style
-      let rawBase64 = recPw.replace(/-/g, "");
-      rawBase64 = rawBase64.replace(/~/g, "+").replace(/_/g, "/");
-      while (rawBase64.length % 4 !== 0) rawBase64 += "=";
-
-      // 2. Import Key
-      const cryptoKey = await importKey(rawBase64);
+      // 1-2. Import key (accepts new and legacy password formats)
+      const cryptoKey = await importKey(tokenToKey(normalizePassword(recPw)));
 
       // 3. Fetch from IPFS Gateway
-      const ipfsRes = await fetch(`${IPFS_GATEWAY}/ipfs/${recCid}`);
+      const ipfsRes = await fetch(`${IPFS_GATEWAY}/ipfs/${recCid.trim()}`);
       if (!ipfsRes.ok) {
         throw new Error("File not found on IPFS or gateway timeout.");
       }
@@ -214,7 +233,7 @@ export default function BurnerDropApp() {
       setRecPw("");
     } catch (err) {
       console.error(err);
-      alert("Decryption Failed: " + (err instanceof Error ? err.message : String(err)));
+      showToast("Decryption failed — check the CID and password");
     } finally {
       setIsProcessing(false);
     }
@@ -271,12 +290,12 @@ export default function BurnerDropApp() {
           <section className="hero">
             <div className="hero-badge">🔐 {BRAND_TAGLINE}</div>
             <h1 className="hero-title">
-              Send files with
+              Share files with
               <br />
-              <span className="gradient-text">double encryption</span>
+              <span className="gradient-text">one encrypted link</span>
             </h1>
             <p className="hero-desc">
-              Every file gets a unique <strong>CID</strong> and <strong>Password</strong>. Both are required to decrypt — so even if one leaks, your file stays safe.
+              Files are encrypted in your browser with AES-256 before upload. The key lives only in the link&apos;s <strong>#fragment</strong>, which never reaches any server — not ours, not IPFS.
             </p>
             <div className="hero-features">
               <div className="feature">
@@ -286,18 +305,23 @@ export default function BurnerDropApp() {
               <div className="feature-arrow">→</div>
               <div className="feature">
                 <div className="feature-num">2</div>
-                <span>Get CID + Password</span>
+                <span>Get a share link</span>
               </div>
               <div className="feature-arrow">→</div>
               <div className="feature">
                 <div className="feature-num">3</div>
-                <span>Share securely</span>
+                <span>Recipient decrypts locally</span>
               </div>
             </div>
           </section>
 
           {/* Card */}
           <section className="card">
+            {!storageReady && (
+              <div className="config-banner">
+                Uploads are disabled on this instance: storage isn&apos;t configured (set <code>PINATA_JWT</code>). Receiving still works.
+              </div>
+            )}
             <div className="card-tabs">
               <button
                 className={`tab ${activeTab === "SEND" ? "active" : ""}`}
@@ -407,9 +431,35 @@ export default function BurnerDropApp() {
                       </div>
                       <div>
                         <p className="result-title">Encrypted & uploaded to IPFS!</p>
-                        <p className="result-sub">Share both credentials with the receiver</p>
+                        <p className="result-sub">Send this link — anyone with it can decrypt the file</p>
                       </div>
                     </div>
+
+                    <div className="credential">
+                      <div className="cred-label">
+                        <div className="cred-badge cid-badge">LINK</div>
+                        <span className="cred-label-text">One-link share (key stays in the #fragment)</span>
+                      </div>
+                      <div className="cred-row share-link-box">
+                        <input type="text" className="cred-input" readOnly value={result.link} onFocus={(e) => e.target.select()} />
+                        <button className="copy-btn" onClick={() => copyToClipboard(result.link, 'link')} aria-label="Copy link">
+                          {copiedField === 'link' ? (
+                            <CheckCircle className="text-green-400" size={14} />
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button className="mode-toggle" onClick={() => setShowSplit((v) => !v)}>
+                      {showSplit ? "Hide split mode" : "Extra paranoid? Share CID and password over two different channels →"}
+                    </button>
+
+                    {showSplit && (<>
 
                     <div className="credential cid-credential">
                       <div className="cred-label">
@@ -457,8 +507,9 @@ export default function BurnerDropApp() {
                         <line x1="12" y1="9" x2="12" y2="13" />
                         <line x1="12" y1="17" x2="12.01" y2="17" />
                       </svg>
-                      Both CID and Password are required to decrypt. Never share them in the same message.
+                      Split mode: send the CID and password over different channels so one leak alone can&apos;t expose the file.
                     </div>
+                    </>)}
 
                     <button className="btn-action btn-new" onClick={clearFile}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -475,17 +526,17 @@ export default function BurnerDropApp() {
             {/* RECEIVE PANEL */}
             {activeTab === "RECEIVE" && (
               <div className="panel">
-                <p className="receive-desc">Enter both the CID and Password to decrypt and download your file.</p>
+                <p className="receive-desc">Paste a share link — or, for split-mode drops, the CID and password.</p>
 
                 <div className="receive-field">
                   <label className="field-label">
                     <span className="cred-badge cid-badge sm">CID</span>
-                    Content Identifier
+                    Share link or CID
                   </label>
                   <input
                     type="text"
                     className="input"
-                    placeholder="e.g. bafkrei..."
+                    placeholder="https://…/d/bafkrei…#…  or  bafkrei…"
                     value={recCid}
                     onChange={(e) => setRecCid(e.target.value)}
                   />
@@ -499,7 +550,7 @@ export default function BurnerDropApp() {
                   <input
                     type="text"
                     className="input"
-                    placeholder="e.g. aX4k-mR9q-bL2w-pN7j..."
+                    placeholder="Only needed for split mode, e.g. aX4k mR9q bL2w…"
                     value={recPw}
                     onChange={(e) => setRecPw(e.target.value)}
                   />
